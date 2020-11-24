@@ -6,7 +6,7 @@
 
 #define PORT_BASE 0x2030
 #define PORT_STATUS PORT_BASE + 1
-#define END_X_BIT 64 
+#define END_X_BIT 64
 #define START_X_BIT 32
 #define END_Y_BIT 8
 #define START_Y_BIT 16
@@ -15,14 +15,14 @@
 
 struct ZScanTable
 {
-  int x;
-  int y;
-  int start_x;
-  int end_x;
-  int start_y;
-  int end_y;
-  int max_x;
-  int max_y;
+  int x;        // текущая координата x
+  int y;        // текущая координата y
+  int start_x;  // не 0, когда стол в начале x
+  int end_x;    // не 0, когда стол в конце  x
+  int start_y;  // не 0, когда стол в начале y
+  int end_y;    // не 0, когда стол в конце  y
+  int length_x; // длина оси x
+  int length_y; // длина оси y
 };
 
 int zscan_table_check_position(struct ZScanTable *table)
@@ -42,13 +42,20 @@ void zscan_table_put_data(struct ZScanTable *table)
 
 int zscan_table_move_x(struct ZScanTable *table, int d_x, int delay)
 {
+  int next_x = table->x + d_x;
+  int max_x = table->length_x / 2;
+  if ( (next_x > max_x) || (next_x < - max_x) )
+  {
+    fprintf(stderr, "**Error**: Недостаточно места для движения по оси x. %i < x < %i  \n", -max_x, max_x);
+    return -1;
+  }
   zscan_table_check_position(table);
   if (d_x > 0)
   {
     //проверка не упремся ли при начале движения
     if (table->end_x) return -1;
     for(int i = 0; i < d_x; i++)
-    { 
+    {
       table->x++;
       zscan_table_put_data(table);
       zscan_table_check_position(table);
@@ -64,7 +71,7 @@ int zscan_table_move_x(struct ZScanTable *table, int d_x, int delay)
     //проверка не упремся ли при начале движения
     if (table->start_x) return -1;
     for(int i = 0; i > d_x; i--)
-    { 
+    {
       table->x--;
       zscan_table_put_data(table);
       zscan_table_check_position(table);
@@ -77,18 +84,24 @@ int zscan_table_move_x(struct ZScanTable *table, int d_x, int delay)
 
   outb(0x00, PORT_BASE);
   return 0;
-  
 }
 
 int zscan_table_move_y(struct ZScanTable *table, int d_y, int delay)
 {
+  int next_y = table->y + d_y;
+  int max_y = table->length_y / 2;
+  if ( (next_y > max_y) || (next_y < - max_y) )
+  {
+    fprintf(stderr, "**Error**: Недостаточно места для движения по оси y. %i < y < %i  \n", -max_y, max_y);
+    return -1;
+  }
   zscan_table_check_position(table);
   if (d_y > 0)
   {
     //проверка не упремся ли при начале движения
     if (table->end_y) return -1;
     for(int i = 0; i < d_y; i++)
-    { 
+    {
       table->y++;
       zscan_table_put_data(table);
       zscan_table_check_position(table);
@@ -104,7 +117,7 @@ int zscan_table_move_y(struct ZScanTable *table, int d_y, int delay)
     //проверка не упремся ли при начале движения
     if (table->start_y) return -1;
     for(int i = 0; i > d_y; i--)
-    { 
+    {
       table->y--;
       zscan_table_put_data  (table);
       zscan_table_check_position(table);
@@ -142,7 +155,7 @@ int zscan_table_calibrate(struct ZScanTable *table, int delay)
     usleep(delay);
   }
   outb(0x00, PORT_BASE);
-  table->max_x = max_x;
+  table->length_x = max_x;
 
   int max_y = 0;
   zscan_table_check_position(table);
@@ -164,7 +177,7 @@ int zscan_table_calibrate(struct ZScanTable *table, int delay)
     usleep(delay);
   }
   outb(0x00, PORT_BASE);
-  table->max_y = max_y;
+  table->length_y = max_y;
 
   zscan_table_move_x(table, - max_x / 2, 2000);
   zscan_table_move_y(table, - max_y / 2, 2000);
@@ -191,7 +204,7 @@ int zscan_table_calibrate(struct ZScanTable *table, int delay)
 //   {
 //     if ((answ & END_X_BIT) || (answ & END_Y_BIT))  return -1;
 //     for(int i = 0, j = 0; (i < d_x) && (j < d_y); i++, j++)
-//     { 
+//     {
 //       x++;
 //       y++;
 //       put_data();
@@ -206,7 +219,7 @@ int zscan_table_calibrate(struct ZScanTable *table, int delay)
 //   {
 //     if ((answ & END_X_BIT) || (answ & START_Y_BIT))  return -1;
 //     for(int i = 0, j = 0; (i < d_x) && (j > d_y); i++, j--)
-//     { 
+//     {
 //       x++;
 //       y--;
 //       put_data();
@@ -221,7 +234,7 @@ int zscan_table_calibrate(struct ZScanTable *table, int delay)
 //   {
 //     if ((answ & START_X_BIT) || (answ & END_Y_BIT))  return -1;
 //     for(int i = 0, j = 0; (i > d_x) && (j < d_y); i--, j++)
-//     { 
+//     {
 //       x--;
 //       y++;
 //       put_data();
@@ -236,7 +249,7 @@ int zscan_table_calibrate(struct ZScanTable *table, int delay)
 //   {
 //     if ((answ & START_X_BIT) || (answ & START_Y_BIT))  return -1;
 //     for(int i = 0, j = 0; (i > d_x) && (j > d_y); i--, j--)
-//     { 
+//     {
 //       x--;
 //       y--;
 //       put_data();
@@ -284,11 +297,16 @@ int main(void)
   struct ZScanTable table;
 
   zscan_table_setup(&table);
+  //zscan_table_calibrate(&table, 2000);
+  //printf("len_x = %i, len_y = %i", table.length_x, table.length_y);
 
-  zscan_table_move_y(&table, 500, 2000);
-  zscan_table_move_to_start(&table, 2000);
+  //table.length_x = 2;
+  //zscan_table_move_x(&table, 10, 2000);
+
+  //zscan_table_move_y(&table, 500, 2000);
+  //zscan_table_move_to_start(&table, 2000);
 
   zscan_table_exit(&table);
-  
+
   return 0;
 }
